@@ -1,43 +1,65 @@
-var express       = require('express');
-var app           = express();
-var path          = require('path');
-var bodyParser    = require('body-parser');
-var http          = require('http').createServer(app);
+const express = require('express');
+const expressLayouts = require('express-ejs-layouts');
+const mongoose = require('mongoose');
+const passport = require('passport');
+const flash = require('connect-flash');
+const session = require('express-session');
 
-//configure app
+const app = express();
+
+// Passport Config
+require('./config/passport')(passport);
+
+// DB Config
+const db = require('./config/keys').mongoURI;
+
+// Connect to MongoDB
+mongoose.connect(
+    db,
+    { useNewUrlParser: true }
+  )
+  .then(() => console.log('MongoDB Connected'))
+  .catch(err => console.log(err));
+
+// EJS
+app.use(expressLayouts);
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
 
-//use middleware
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-app.use(express.static(__dirname));
+// Express body parser
+app.use(express.urlencoded({ extended: true }));
 
-//set routes
+// Express session
+app.use(
+  session({
+    secret: 'secret',
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 5000
+    },
+    rolling: true
+  })
+);
 
-var initialItems = [{id: 1, name: "item1"}, 
-                    {id: 2, name: "item2"}, 
-                    {id: 3, name: "item3"}];
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
 
-app.get('/', function(req, res){
-  res.render("index", {
-    title: 'My First Application',
-    items: initialItems
-  });
+// Connect flash
+app.use(flash());
+
+// Global variables
+app.use(function(req, res, next) {
+  res.locals.success_msg = req.flash('success_msg');
+  res.locals.error_msg = req.flash('error_msg');
+  res.locals.error = req.flash('error');
+  next();
 });
 
-app.post('/add', function(req, res){
-  var item = req.body.newItem;
-  initialItems.push({
-    id: initialItems.length + 1,
-    name: item
-  });
+// Routes
+app.use('/', require('./routes/index.js'));
+app.use('/users', require('./routes/users.js'));
 
-  res.redirect('/');
-});
+const PORT = process.env.PORT || 5000;
 
-var port = process.env.PORT || 3000;
-
-http.listen(port, function(){
-  console.log('listening on *: ' + port);
-});
+app.listen(PORT, console.log(`Server started on port ${PORT}`));
